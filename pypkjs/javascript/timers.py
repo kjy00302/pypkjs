@@ -9,12 +9,14 @@ class Timers(object):
         self.runtime = runtime
         self.timers = {}
         self.counter = 1
-        self.extension = v8.JSExtension(self.runtime.ext_name('timers'), """
-        (function() {
-            native function _timers();
-            _make_proxies(this, _timers(), ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']);
-        })();
-        """, lambda f: lambda: self, dependencies=["runtime/internal/proxy"])
+        runtime.natives['timers'] = self
+        with runtime.context as ctx:
+            ctx.eval("""
+            (function() {
+                var _timers = _from_python('timers');
+                _make_proxies(this, _timers, ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']);
+            })();
+            """)
 
     def _exec_timer(self, timer_key, timeout_s, repeat, fn):
         while True:

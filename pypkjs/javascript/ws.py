@@ -10,56 +10,8 @@ import pypkjs.PyV8 as v8
 from .exceptions import JSRuntimeException
 from . import events
 
-close_event = v8.JSExtension("runtime/events/ws", """
-CloseEvent = function(eventInitDict) {
-    Event.call(this, "close", eventInitDict);
-    var wasClean = eventInitDict.wasClean;
-    var code = eventInitDict.code;
-    var reason = eventInitDict.reason;
-    Object.defineProperties(this, {
-        wasClean: {
-            get: function() { return wasClean; },
-            enumerable: true,
-        },
-        code: {
-            get: function() { return code; },
-            enumerable: true,
-        },
-        reason: {
-            get: function() { return reason; },
-            enumerable: true,
-        },
-    });
-};
-CloseEvent.prototype = Object.create(Event.prototype);
-CloseEvent.prototype.constructor = CloseEvent;
-MessageEvent = function(origin, data, eventInitDict) {
-    Event.call(this, "message", eventInitDict);
-    this.data = data;
-    this.origin = origin;
-};
-MessageEvent.prototype = Object.create(Event.prototype);
-MessageEvent.prototype.constructor = CloseEvent;
-""", dependencies=["runtime/event"])
-
 CloseEvent = lambda runtime, *args: v8.JSObject.create(runtime.context.locals.CloseEvent, args)
 MessageEvent = lambda runtime, *args: v8.JSObject.create(runtime.context.locals.MessageEvent, args)
-
-ws = v8.JSExtension("runtime/ws", """
-_init_websocket = function(runtime, session) {
-    native function _ws();
-    this.WebSocket = function(url, protocols) {
-        var origin = new _ws(runtime, url, protocols);
-        _make_proxies(this, origin, ['close', 'send']);
-        _make_properties(this, origin, ['readyState', 'bufferedAmount', 'onopen', 'onerror', 'onclose', 'onmessage',
-                                        'extensions', 'protocol', 'binaryType']);
-    };
-    this.WebSocket.CONNECTING = 0;
-    this.WebSocket.OPEN = 1;
-    this.WebSocket.CLOSING = 2;
-    this.WebSocket.CLOSED = 3;
-}
-""", lambda f: WebSocket, dependencies=[close_event.name])
 
 
 class WebSocket(events.EventSourceMixin):
@@ -70,6 +22,39 @@ class WebSocket(events.EventSourceMixin):
 
     def __init__(self, runtime, url, protocols=None):
         super(WebSocket, self).__init__(runtime)
+
+        with runtime.context as ctx:
+            ctx.eval("""
+            CloseEvent = function(eventInitDict) {
+                Event.call(this, "close", eventInitDict);
+                var wasClean = eventInitDict.wasClean;
+                var code = eventInitDict.code;
+                var reason = eventInitDict.reason;
+                Object.defineProperties(this, {
+                    wasClean: {
+                        get: function() { return wasClean; },
+                        enumerable: true,
+                    },
+                    code: {
+                        get: function() { return code; },
+                        enumerable: true,
+                    },
+                    reason: {
+                        get: function() { return reason; },
+                        enumerable: true,
+                    },
+                });
+            };
+            CloseEvent.prototype = Object.create(Event.prototype);
+            CloseEvent.prototype.constructor = CloseEvent;
+            MessageEvent = function(origin, data, eventInitDict) {
+                Event.call(this, "message", eventInitDict);
+                this.data = data;
+                this.origin = origin;
+            };
+            MessageEvent.prototype = Object.create(Event.prototype);
+            MessageEvent.prototype.constructor = CloseEvent;
+            """)
 
         self.runtime = runtime
         self.url = url
@@ -175,4 +160,21 @@ class WebSocket(events.EventSourceMixin):
 
 
 def prepare_ws(runtime):
+    runtime.natives['ws'] = WebSocket
+    with runtime.context as ctx:
+        ctx.eval("""
+        _init_websocket = function(runtime, session) {
+            var _ws = _from_python('ws');
+            this.WebSocket = function(url, protocols) {
+                var origin = new _ws(runtime, url, protocols);
+                _make_proxies(this, origin, ['close', 'send']);
+                _make_properties(this, origin, ['readyState', 'bufferedAmount', 'onopen', 'onerror', 'onclose', 'onmessage',
+                                                'extensions', 'protocol', 'binaryType']);
+            };
+            this.WebSocket.CONNECTING = 0;
+            this.WebSocket.OPEN = 1;
+            this.WebSocket.CLOSING = 2;
+            this.WebSocket.CLOSED = 3;
+        }
+        """)
     return runtime.context.locals._init_websocket(runtime)

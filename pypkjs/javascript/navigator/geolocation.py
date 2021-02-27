@@ -7,29 +7,25 @@ import requests
 import pygeoip
 import os.path
 
-position = v8.JSExtension("runtime/geolocation/position", """
-    Position = (function(coords, timestamp) {
-        this.coords = coords;
-        this.timestamp = timestamp;
-    });
-""")
-
 Position = lambda runtime, *args: v8.JSObject.create(runtime.context.locals.Position, args)
-
-coordinates = v8.JSExtension("runtime/geolocation/coordinates", """
-    Coordinates = (function(long, lat, accuracy) {
-        this.longitude = long
-        this.latitude = lat
-        this.accuracy = accuracy
-    });
-""")
-
 Coordinates = lambda runtime, *args: v8.JSObject.create(runtime.context.locals.Coordinates, args)
 
 
 class Geolocation(object):
     def __init__(self, runtime):
         self.runtime = runtime
+        with runtime.context as ctx:
+            ctx.eval("""
+            Position = (function(coords, timestamp) {
+                this.coords = coords;
+                this.timestamp = timestamp;
+            });
+            Coordinates = (function(long, lat, accuracy) {
+                this.longitude = long
+                this.latitude = lat
+                this.accuracy = accuracy
+            });
+            """)
 
     def _get_position(self, success, failure):
         try:

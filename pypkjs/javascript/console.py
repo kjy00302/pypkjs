@@ -7,12 +7,14 @@ import pypkjs.PyV8 as v8
 class Console(object):
     def __init__(self, runtime):
         self.runtime = runtime
-        self.extension = v8.JSExtension(self.runtime.ext_name("console"), """
-        console = new (function () {
-            native function _internal_console();
-            _make_proxies(this, _internal_console(), ['log', 'warn', 'info', 'error']);
-        })();
-        """, lambda f: lambda: self, dependencies=["runtime/internal/proxy"])
+        runtime.natives['console'] = self
+        with runtime.context as ctx:
+            ctx.eval("""
+            console = new (function () {
+                var _internal_console = _from_python('console');
+                _make_proxies(this, _internal_console, ['log', 'warn', 'info', 'error']);
+            })();
+            """)
 
     def log(self, *params):
         # kOverview == kLineNumber | kColumnOffset | kScriptName | kFunctionName

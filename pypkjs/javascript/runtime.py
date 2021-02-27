@@ -13,31 +13,6 @@ from .exceptions import JSRuntimeException
 
 logger = logging.getLogger('pypkjs.javascript.pebble')
 
-make_proxy_extension = v8.JSExtension("runtime/internal/proxy", """
-    function _make_proxies(proxy, origin, names) {
-        names.forEach(function(name) {
-            proxy[name] = eval("(function " + name + "() { return origin[name].apply(origin, arguments); })");
-        });
-        return proxy;
-    }
-    function _make_properties(proxy, origin, names) {
-        names.forEach(function(name) {
-            Object.defineProperty(proxy, name, {
-                configurable: false,
-                enumerable: true,
-                get: function() {
-                    return origin[name];
-                },
-                set: function(value) {
-                    origin[name] = value;
-                }
-            });
-        });
-        return proxy;
-    }
-""")
-
-
 class JSRuntime(object):
     def __init__(self, qemu, pbw, runner, persist_dir=None, block_private_addresses=False):
         self.group = gevent.pool.Group()
@@ -48,16 +23,42 @@ class JSRuntime(object):
         self.runtime_id = JSRuntime.runtimeCount
         self.persist_dir = persist_dir
         self.block_private_addresses = block_private_addresses
+        self.natives = {}
         JSRuntime.runtimeCount += 1
 
     def setup(self):
-        self.pjs = PebbleKitJS(self, self.qemu, persist=self.persist_dir)
-        self.context = v8.JSContext(extensions=self.pjs.get_extension_names())
+        self.context = v8.JSContext()
         with self.context:
             # Do some setup
+            self.context.locals._from_python = lambda name: self.natives.get(name)
+            self.context.eval("""
+            function _make_proxies(proxy, origin, names) {
+                names.forEach(function(name) {
+                    proxy[name] = eval("(function " + name + "() { return origin[name].apply(origin, arguments); })");
+                });
+                return proxy;
+            }
+            function _make_properties(proxy, origin, names) {
+                names.forEach(function(name) {
+                    Object.defineProperty(proxy, name, {
+                        configurable: false,
+                        enumerable: true,
+                        get: function() {
+                            return origin[name];
+                        },
+                        set: function(value) {
+                            origin[name] = value;
+                        }
+                    });
+                });
+                return proxy;
+            }
+            """)
             self.context.eval("this.toString = function() { return '[object Window]'; }")
             self.context.eval("window = this;")
+            self.pjs = PebbleKitJS(self, self.qemu, persist=self.persist_dir)
             self.pjs.do_post_setup()
+            del self.context.locals._from_python
 
     def run(self, src, filename="pebble-js-app.js"):
         self.setup()

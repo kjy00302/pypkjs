@@ -11,52 +11,7 @@ from . import events
 from .safe_requests import NonlocalHTTPAdapter
 from .exceptions import JSRuntimeException
 
-progress_event = v8.JSExtension("runtime/events/progress", """
-ProgressEvent = function(computable, loaded, total) {
-    Event.call(this);
-    computable = computable || false;
-    loaded = loaded || 0;
-    total = total || 0;
-    Object.defineProperties(this, {
-        lengthComputable: {
-            get: function() { return computable; },
-            enumerable: true,
-        },
-        loaded: {
-            get: function() { return loaded; },
-            enumerable: true,
-        },
-        total: {
-            get: function() { return total; },
-            enumerable: true,
-        },
-    });
-}
-ProgressEvent.prototype = Object.create(Event.prototype);
-ProgressEvent.prototype.constructor = ProgressEvent;
-""", dependencies=["runtime/event"])
-
 ProgressEvent = lambda runtime, *args: v8.JSObject.create(runtime.context.locals.ProgressEvent, args)
-
-xml_http_request = v8.JSExtension("runtime/xhr", """
-_init_xhr = function(runtime, session) {
-    native function _xhr();
-    this.XMLHttpRequest = function() {
-        var origin = new _xhr(runtime, session);
-        _make_proxies(this, origin, ['open', 'setRequestHeader', 'overrideMimeType', 'send', 'getResponseHeader',
-                                        'getAllResponseHeaders', 'abort', 'addEventListener', 'removeEventListener']);
-        _make_properties(this, origin, ['readyState', 'response', 'responseText', 'responseType', 'status',
-                                        'statusText', 'timeout', 'onreadystatechange', 'ontimeout', 'onload',
-                                        'onloadstart', 'onloadend', 'onprogress', 'onerror', 'onabort']);
-    }
-    this.XMLHttpRequest.UNSENT = 0;
-    this.XMLHttpRequest.OPENED = 1;
-    this.XMLHttpRequest.HEADERS_RECEIVED = 2;
-    this.XMLHttpRequest.LOADING = 3;
-    this.XMLHttpRequest.DONE = 4;
-
-}
-""", lambda f: XMLHttpRequest, dependencies=[progress_event.name])
 
 
 class XMLHttpRequest(events.EventSourceMixin):
@@ -95,6 +50,32 @@ class XMLHttpRequest(events.EventSourceMixin):
         self._session = session
         self._thread = None
         self._sent = False
+
+        with runtime.context as ctx:
+            ctx.eval("""
+            ProgressEvent = function(computable, loaded, total) {
+                Event.call(this);
+                computable = computable || false;
+                loaded = loaded || 0;
+                total = total || 0;
+                Object.defineProperties(this, {
+                    lengthComputable: {
+                        get: function() { return computable; },
+                        enumerable: true,
+                    },
+                    loaded: {
+                        get: function() { return loaded; },
+                        enumerable: true,
+                    },
+                    total: {
+                        get: function() { return total; },
+                        enumerable: true,
+                    },
+                });
+            }
+            ProgressEvent.prototype = Object.create(Event.prototype);
+            ProgressEvent.prototype.constructor = ProgressEvent;
+            """)
 
         super(XMLHttpRequest, self).__init__(runtime)
 
@@ -204,4 +185,24 @@ def prepare_xhr(runtime):
         adapter = NonlocalHTTPAdapter()
         session.mount('http://', adapter)
         session.mount('https://', adapter)
+    runtime.natives['xhr'] = XMLHttpRequest
+    with runtime.context as ctx:
+        ctx.eval("""
+        _init_xhr = function(runtime, session) {
+            var _xhr = _from_python('xhr')
+            this.XMLHttpRequest = function() {
+                var origin = new _xhr(runtime, session);
+                _make_proxies(this, origin, ['open', 'setRequestHeader', 'overrideMimeType', 'send', 'getResponseHeader',
+                                                'getAllResponseHeaders', 'abort', 'addEventListener', 'removeEventListener']);
+                _make_properties(this, origin, ['readyState', 'response', 'responseText', 'responseType', 'status',
+                                                'statusText', 'timeout', 'onreadystatechange', 'ontimeout', 'onload',
+                                                'onloadstart', 'onloadend', 'onprogress', 'onerror', 'onabort']);
+            }
+            this.XMLHttpRequest.UNSENT = 0;
+            this.XMLHttpRequest.OPENED = 1;
+            this.XMLHttpRequest.HEADERS_RECEIVED = 2;
+            this.XMLHttpRequest.LOADING = 3;
+            this.XMLHttpRequest.DONE = 4;
+        }
+        """)
     return runtime.context.locals._init_xhr(runtime, session)
