@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 __author__ = 'katharine'
 
 import STPyV8 as v8
