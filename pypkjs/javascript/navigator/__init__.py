@@ -12,6 +12,7 @@ class Navigator(object):
             ctx.eval("""
             navigator = new (function() {
                 this.language = 'en-GB';
+                this.onLine = true;
                 var location = _from_python('location');
                 if(true) { // TODO: this should be a check on geolocation being enabled.
                     this.geolocation = new (function() {
