@@ -17,7 +17,7 @@ logger = logging.getLogger("pypkjs.pebble_manager")
 
 class PebbleManager(object):
     def __init__(self, qemu):
-        self.qemu = qemu.split(':') #TODO find more elegant solution
+        self.qemu = qemu.split(':')
         self.qemu[1] = int(self.qemu[1])
         print(self.qemu)
         self.pebble = PebbleConnection(QemuTransport(*self.qemu), log_packet_level=logging.DEBUG)
