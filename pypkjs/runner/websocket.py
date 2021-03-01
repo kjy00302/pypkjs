@@ -207,13 +207,13 @@ class WebsocketRunner(Runner):
     @must_auth
     def do_qemu_command(self, ws, message):
         protocol = message[0]
-        self.pebble.pebble.transport.send_packet(str(message[1:]),
+        self.pebble.pebble.transport.send_packet(bytes(message[1:]),
                                                  target=MessageTargetQemu(protocol=protocol, raw=True))
 
     @must_auth
     def do_timeline_command(self, ws, message):
         command = message[0]
-        message = str(message[1:])
+        message = message[1:].decode('utf-8')
         try:
             if command == 0x01:
                 try:
