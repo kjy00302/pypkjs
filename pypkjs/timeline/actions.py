@@ -31,8 +31,9 @@ class ActionHandler(object):
             item = TimelineItem.get(TimelineItem.uuid == item_id)
             actions = TimelineActionSet(item, self.timeline, uuid.UUID(item.parent))
             action = actions.get_actions()[action_id]
+            parent_id = item.parent
         except (TimelineItem.DoesNotExist, KeyError, IndexError):
-            self.send_result(item_id, False, attributes={
+            self.send_result(item_id, '00' * 16, False, attributes={
                 'subtitle': 'Failed',
                 'largeIcon': 'system://images/RESULT_FAILED',
             })
@@ -50,14 +51,14 @@ class ActionHandler(object):
             try:
                 result = action_handlers[action['type']](item, action)
                 if result is not None:
-                    self.send_result(item_id, *result)
+                    self.send_result(item_id, parent_id, *result)
             except Exception as e:
                 import traceback
                 traceback.print_exc()
                 logging.warning("Something broke: %s", e)
-                self.send_result(item_id, False, {'subtitle': 'Failed', 'largeIcon': 'system://images/RESULT_SENT'})
+                self.send_result(item_id, parent_id, False, {'subtitle': 'Failed', 'largeIcon': 'system://images/RESULT_SENT'})
         else:
-           self.send_result(item_id, False, {'subtitle': 'Not Implemented', 'largeIcon': 'system://images/RESULT_FAILED'})
+           self.send_result(item_id, parent_id, False, {'subtitle': 'Not Implemented', 'largeIcon': 'system://images/RESULT_FAILED'})
 
     def handle_remove(self, item, action):
         item.deleted = True
@@ -92,13 +93,13 @@ class ActionHandler(object):
                 response.raise_for_status()
             except requests.RequestException as e:
                 logging.warning("HTTP request failed: %s", e.message)
-                self.send_result(item.uuid, False, {
+                self.send_result(item.uuid, item.parent, False, {
                     'subtitle': action.get("failureText", "Failed!"),
                     'largeIcon': action.get("failureIcon", "system://images/RESULT_FAILED")
                 })
             else:
                 logging.info("HTTP request succeeded.")
-                self.send_result(item.uuid, True, {
+                self.send_result(item.uuid, item.parent, True, {
                     'subtitle': action.get("successText", "Done!"),
                     'largeIcon': action.get("failureIcon", "system://images/GENERIC_CONFIRMATION")
                 })
@@ -109,13 +110,13 @@ class ActionHandler(object):
         # We don't actually have to do anything for 'dismiss' actions, but the watch expects us to ACK.
         return True, {'subtitle': 'Dismissed', 'largeIcon': 'system://images/RESULT_DISMISSED'}
 
-    def send_result(self, item, success, attributes=None):
-        self.logger.info("%sing %s action.", "ACK" if success else "NACK", item.uuid)
+    def send_result(self, item_id, parent_id, success, attributes=None):
+        self.logger.info("%sing %s action.", "ACK" if success else "NACK", item_id)
         if attributes is None:
             attributes = {}
-        attribute_set = TimelineAttributeSet(attributes, self.timeline, uuid.UUID(item.parent))
+        attribute_set = TimelineAttributeSet(attributes, self.timeline, uuid.UUID(parent_id))
         attribute_list = attribute_set.serialise()
-        response = TimelineActionEndpoint(data=ActionResponse(item_id=uuid.UUID(item.uuid), response=int(not success),
+        response = TimelineActionEndpoint(data=ActionResponse(item_id=uuid.UUID(item_id), response=int(not success),
                                                               attributes=attribute_list))
         self.logger.debug("Serialised action response: %s", response.serialise().encode('hex'))
         self.pebble.pebble.send_packet(response)
