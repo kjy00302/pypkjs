@@ -36,7 +36,7 @@ class LocalStorage(object):
 
                 var proxy = _make_proxies({}, _internal, ['set', 'has', 'deleteProperty', 'keys', 'enumerate']);
                 var methods = _make_proxies({}, _internal, ['clear', 'getItem', 'setItem', 'removeItem', 'key']);
-                proxy.get = function get(p, name) { return methods[name] || _internal().get(p, name); }
+                proxy.get = function get(p, name) { return methods[name] || _internal.get(p, name); }
 
                 this.localStorage = new Proxy(methods, proxy);
             })();
