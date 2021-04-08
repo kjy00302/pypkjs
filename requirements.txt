@@ -10,3 +10,4 @@ sh>=1.09
 websocket-client>=0.32.0
 libpebble2>=0.0.20
 netaddr>=0.7.18
+stpyv8 >= 8

@@ -15,7 +15,8 @@ requirements = [
     'six>=1.9.0',
     'websocket-client>=0.32.0',
     'libpebble2>=0.0.20',
-    'netaddr>=0.7.18'
+    'netaddr>=0.7.18',
+    'stpyv8 >= 8'
 ]
 
 __version__= None  # Overwritten by executing version.py.
