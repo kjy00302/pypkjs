@@ -118,5 +118,5 @@ class ActionHandler(object):
         attribute_list = attribute_set.serialise()
         response = TimelineActionEndpoint(data=ActionResponse(item_id=uuid.UUID(item_id), response=int(not success),
                                                               attributes=attribute_list))
-        self.logger.debug("Serialised action response: %s", response.serialise().encode('hex'))
+        self.logger.debug("Serialised action response: %s", response.serialise().hex())
         self.pebble.pebble.send_packet(response)
