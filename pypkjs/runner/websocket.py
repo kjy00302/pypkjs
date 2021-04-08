@@ -106,6 +106,7 @@ class WebsocketRunner(Runner):
                 except WebSocketError:
                     break
             self.on_close(ws)
+            return []
 
     def on_open(self, ws, *args, **kwargs):
         ws.authed = not self.requires_auth
